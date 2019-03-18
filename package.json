@@ -1,0 +1,28 @@
+{
+  "name": "Snake",
+  "version": "1.0.0",
+  "description": "Realtime multiplayer ",
+  "main": "index.js",
+  "author": "Mohammad Maaz",
+  "license": "None",
+  "dependencies": {
+    "express": "",
+    "concurrently": "^4.1.0",
+    "fs": "^0.0.1-security",
+    "http": "^0.0.0",
+    "http-server": "^0.11.1",
+    "opn": "^5.4.0",
+    "react": "^16.6.3",
+    "react-dom": "^16.6.3",
+    "socket-io": "^1.0.0",
+    "socket.io": "^2.2.0",
+    "watchify": "^3.11.0",
+    "phaser": ""
+  },
+  "scripts": {
+    "start": "npm run browser && npm run server",
+    "server": "node src/server.js",
+    "browser": "firefox 'http://localhost:8000/index.html'",
+    "dev": "watchify src/index.js -o src/bundle.js"
+  }
+}
