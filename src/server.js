@@ -4,6 +4,7 @@ const socketio = require('socket.io')
 
 var PORT = 8000
 
+const snakeSegments = 12;
 
 const server = http.createServer(async(req,resp) =>{
   resp.end(await readFile(req.url.substr(1)))
@@ -29,8 +30,8 @@ io.on('connection', socket =>{
     playerId: socket.id,
   };
 
-  players[socket.id]["body"] = Array(10).fill(0).map((_,index) => {
-    return { "x": (-1*chunks*(index+1) + players[socket.id].x)  , "y": players[socket.id].y };
+  players[socket.id]["body"] = Array(snakeSegments*snakeSegments).fill(0).map((_,index) => {
+    return { "x": (-5*chunks*(index+1) + players[socket.id].x)  , "y": players[socket.id].y };
   })
 
 
@@ -43,10 +44,11 @@ io.on('connection', socket =>{
   socket.broadcast.emit('newPlayer', players[socket.id]);
 
   socket.on('playerMovement', function (movementData) {
-    //console.log('movement recieved')
+    //console.log(`movement recieved from ${socket.id}`)
     players[socket.id].x = movementData.x;
     players[socket.id].y = movementData.y;
     players[socket.id].rotation = movementData.rotation;
+    players[socket.id].body = movementData.body;
     // emit a message to all OTHER players about the player that moved
     socket.broadcast.emit('playerMoved', players[socket.id]);
   });
