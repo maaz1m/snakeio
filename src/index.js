@@ -41,14 +41,6 @@ function addPlayer(self, playerInfo) {
 
 function addOther(self, playerInfo) {
   let otherPlayer = self.add.sprite(playerInfo.x, playerInfo.y, 'ball').setOrigin(0.5, 0.5); //{"body": new Array(snakeSegments)}   
-
-  let snake_x = snake_y = 0;
-
-  if(this.snake){
-    snake_x = this.snake.x;
-    snake_y = this.snake.y;
-  }
-
   otherPlayer.playerId = playerInfo.playerId;
   self.otherPlayers.add(otherPlayer);
 }
@@ -59,6 +51,9 @@ function create() {
   this.cursors = this.input.keyboard.createCursorKeys();
 
   var self = this;
+
+  this.alive = true; //Player moves only till they are alive
+  this.grace = true; // Initial Grace Period: Nobody dies until game officially starts
   this.socket = io();
   this.otherPlayers = this.physics.add.group();
   this.socket.on('renderGame', function (players) {
@@ -76,6 +71,11 @@ function create() {
     addOther(self, playerInfo);
   });
 
+  this.socket.on('start', (_) => {
+    console.log('Game started!');
+    self.alive = true;
+  })
+
 
   this.socket.on('playerMoved', function (playerInfo) {
     //console.log('movement recieved')
@@ -91,9 +91,12 @@ function create() {
         }*/
         for(let i =0;i<snakeSegments;i++){
           //otherPlayer.body[i] = self.add.sprite(playerInfo["body"][i].x , playerInfo["body"][i].y,'ball').setOrigin(0.5,0.5);
-          if(self.snake && (self.snake.x > playerInfo.body[i].x && self.snake.x < playerInfo.body[i].x +50) 
+          if(!self.grace && self.snake && (self.snake.x > playerInfo.body[i].x && self.snake.x < playerInfo.body[i].x +50) // Collision with other snake
             && (self.snake.y > playerInfo.body[i].y && self.snake.y < playerInfo.body[i].y +50)) {
             console.log('Crashed into opponent');
+            self.socket.emit('crash', {});
+            self.socket.disconnect();
+            self.alive = false;
             break;
           }
         }
@@ -108,11 +111,22 @@ function create() {
       }
     });
   });
+  this.socket.on('crash', function (playerId) {
+    self.otherPlayers.getChildren().forEach(function (otherPlayer) {
+      if (playerId === otherPlayer.playerId) {
+        otherPlayer.destroy();
+      }
+    });
+  });
+
+  this.socket.on('grace', (_) => {
+    self.grace = false;
+
+  });
 }
 
-var counter = 0;
 function update() {
-  if(this.snake){
+  if(this.alive && this.snake){
 
     if (this.cursors.left.isDown) {
       this.snake.setAngularVelocity(-200);
@@ -132,13 +146,28 @@ function update() {
     for(let i = 0; i < snakeSegments; i++){
       this.snakeBody[i].x = this.body[i*snakeSegments].x ;
       this.snakeBody[i].y = this.body[i*snakeSegments].y ;
-      sendPos.push({"x":this.snakeBody[i].x , "y": this.snakeBody[i].y});
+      this.snakeBody[i].rotation = this.body[i*snakeSegments].rotation;
+      sendPos.push({"x":this.snakeBody[i].x , "y": this.snakeBody[i].y, "rotation": this.snakeBody[i].rotation});
     }
 
     /* Values very close but different hence set doesnt reduce length
     if([... new Set(sendPos)].length != sendPos.length){
       console.log('Self Collision');
     }*/
+
+    //Shittier check for self collision
+    for(let i = 0; i< sendPos.length; i++){
+      for(let j = 0; j< sendPos.length; j++){
+        
+        if(!this.grace && i!=j && (sendPos[i].x > sendPos[j].x && sendPos[i].x < sendPos[j].x+5) && (sendPos[i].y > sendPos[j].y && sendPos[i].y < sendPos[j].y+5))
+        {
+          console.log('Self Collision');
+          this.alive = false;
+          this.socket.emit('crash',{});
+          this.socket.disconnect();
+        }
+      }
+    }
 
     
 
@@ -163,14 +192,7 @@ function update() {
     };            
 
 
-    counter++;
     this.body.pop();
-    this.body.unshift({"x": this.snake.oldPosition.x , "y": this.snake.oldPosition.y});
-
-
-
-
-
-
+    this.body.unshift({"x": this.snake.oldPosition.x , "y": this.snake.oldPosition.y, "rotation": this.snake.oldPosition.rotation});
   }
 }

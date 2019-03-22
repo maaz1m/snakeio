@@ -17,16 +17,21 @@ const io = socketio(server)
 
 var players = {}
 
-const chunks = 10;
+const chunks = 10; // seperation between initial snake locations
+
+let currentPlayers = 0;
+let numPlayers = 2;
 
 io.on('connection', socket =>{
   console.log('A player connected')
+  currentPlayers++;
+
 
   // create a new player and add it to our players object
   players[socket.id] = {
     rotation: 0,
     x: Math.floor(Math.random() * 700) + 50,
-    y: Math.floor(Math.random() * 500) + 50,
+    y: Math.floor(Math.random() * 550) + 50,
     playerId: socket.id,
   };
 
@@ -37,11 +42,22 @@ io.on('connection', socket =>{
 
 
 
+
   // send the info of players already playing to the new player
   socket.emit('renderGame', players);
 
+
   // update all other players of the new player
   socket.broadcast.emit('newPlayer', players[socket.id]);
+
+  if(numPlayers == currentPlayers){
+    io.emit('start', {})
+    setTimeout(() => { 
+      io.emit('grace',{}); 
+      console.log('Grace-Period ended ...');
+    }, 5000);
+
+  }
 
   socket.on('playerMovement', function (movementData) {
     //console.log(`movement recieved from ${socket.id}`)
@@ -53,6 +69,11 @@ io.on('connection', socket =>{
     socket.broadcast.emit('playerMoved', players[socket.id]);
   });
 
+  socket.on('crash', (data) => {
+    console.log(`${socket.id} crashed`);
+    socket.broadcast.emit('crash',socket.id);
+  })
+
 
   // when a player disconnects, remove them from our players object
   socket.on('disconnect', function () {
@@ -61,6 +82,7 @@ io.on('connection', socket =>{
     delete players[socket.id];
     // emit a message to all players to remove this player
     io.emit('disconnect', socket.id);
+    currentPlayers--;
   })
 })
 
