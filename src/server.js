@@ -17,62 +17,83 @@ const io = socketio(server)
 
 var players = {}
 
-const chunks = 10; // seperation between initial snake locations
+var food = {
+  x: Math.floor(Math.random() * 700) + 50,
+  y: Math.floor(Math.random() * 500) + 50
+};
+
+
+const initNumSegments = 5;
+const numSpacer = 10;
 
 let currentPlayers = 0;
 let numPlayers = 2;
+
+const createPlayer = (socket)=>{
+
+  var randX = Math.floor(Math.random() * 700) + 50;
+  var randY = Math.floor(Math.random() * 550) + 50;
+  var randColor = Math.random() * 0xffffff
+  return {
+      rotation: 0,
+      x: randX,
+      y: randY,
+      playerId: socket.id,
+      color: randColor,
+      len: initNumSegments,
+      path: new Array(numSpacer*initNumSegments).fill({x: randX, y: randY}),
+      body: new Array(initNumSegments).fill({x: randX, y: randY})
+    }
+
+}
 
 io.on('connection', socket =>{
   console.log('A player connected')
   currentPlayers++;
 
-
-  // create a new player and add it to our players object
-  players[socket.id] = {
-    rotation: 0,
-    x: Math.floor(Math.random() * 700) + 50,
-    y: Math.floor(Math.random() * 550) + 50,
-    playerId: socket.id,
-  };
-
-  players[socket.id]["body"] = Array(snakeSegments*snakeSegments).fill(0).map((_,index) => {
-    return { "x": (-5*chunks*(index+1) + players[socket.id].x)  , "y": players[socket.id].y };
-  })
-
-
-
-
+  players[socket.id] = createPlayer(socket)
 
   // send the info of players already playing to the new player
   socket.emit('renderGame', players);
 
-
   // update all other players of the new player
   socket.broadcast.emit('newPlayer', players[socket.id]);
 
-  if(numPlayers == currentPlayers){
-    io.emit('start', {})
-    setTimeout(() => { 
-      io.emit('grace',{}); 
-      console.log('Grace-Period ended ...');
-    }, 5000);
+  //Send location of new food
+  socket.emit('foodLocation', food);
 
-  }
+  // if(numPlayers === currentPlayers){
+  //   io.emit('start', {})
+  //   setTimeout(() => { 
+  //     io.emit('grace',{}); 
+  //     console.log('Grace-Period ended ...');
+  //   }, 5000);
+
+  // }
 
   socket.on('playerMovement', function (movementData) {
     //console.log(`movement recieved from ${socket.id}`)
     players[socket.id].x = movementData.x;
     players[socket.id].y = movementData.y;
     players[socket.id].rotation = movementData.rotation;
-    players[socket.id].body = movementData.body;
+    players[socket.id]['body'] = movementData['body'];
+    players[socket.id]['path'] = movementData['path'];
     // emit a message to all OTHER players about the player that moved
     socket.broadcast.emit('playerMoved', players[socket.id]);
   });
 
-  socket.on('crash', (data) => {
-    console.log(`${socket.id} crashed`);
-    socket.broadcast.emit('crash',socket.id);
-  })
+  // socket.on('crash', (data) => {
+  //   console.log(`${socket.id} crashed`);
+  //   socket.broadcast.emit('crash',socket.id);
+  // })
+
+  socket.on('foodCollected', function () {
+    food.x = Math.floor(Math.random() * 700) + 50;
+    food.y = Math.floor(Math.random() * 500) + 50;
+    io.emit('grow', players[socket.id])
+    io.emit('foodLocation', food);
+  });
+
 
 
   // when a player disconnects, remove them from our players object
@@ -82,7 +103,7 @@ io.on('connection', socket =>{
     delete players[socket.id];
     // emit a message to all players to remove this player
     io.emit('disconnect', socket.id);
-    currentPlayers--;
+    currentPlayers-=1;
   })
 })
 

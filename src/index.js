@@ -20,29 +20,55 @@ var config = {
   } 
 };
 
+
+
 var game = new Phaser.Game(config);
-const snakeSegments = 12;
+
+const numSpacer = 12;
 
 function preload() {
   this.load.image('ball', 'assets/ball.png');
+  this.load.image('food', 'assets/food.png');
 }
 
 function addPlayer(self, playerInfo) {
-  self.snake = self.physics.add.image(playerInfo.x, playerInfo.y, 'ball').setOrigin(0.5, 0.5);
-  var snakeBody = playerInfo["body"];
-  self.body = playerInfo["body"];
-  self.snakeBody = Array(snakeSegments) //snakeBody.map(pos => { return self.physics.add.image(pos.x, pos.y, 'ball').setOrigin(0.5,0.5); })
-
-  for(let i =0; i<snakeSegments; i++){
-    self.snakeBody[i] = self.physics.add.image(playerInfo["body"][i*snakeSegments].x, playerInfo["body"][i*snakeSegments].y,'ball').setOrigin(0.5,0.5);
+  self.snakeLength = playerInfo.len
+  self.snakeHead = self.physics.add.image(playerInfo.x, playerInfo.y, 'ball').setOrigin(0.5, 0.5).setTint(playerInfo.color);
+  self.snakeBody = Array(playerInfo.len) //snakeBody.map(pos => { return self.physics.add.image(pos.x, pos.y, 'ball').setOrigin(0.5,0.5); })
+  self.snakePath = Array(playerInfo.len*numSpacer)
+  for(let i =1; i<=playerInfo.len-1; i++){
+    
+    self.snakeBody[i] = self.physics.add.image(playerInfo.x,playerInfo.y,'ball').setOrigin(0.5,0.5).setTint(playerInfo.color);
+    
+    if(i>2){
+      self.ownBody.add(self.snakeBody[i])      
+    }
   }
 
+  for (var i = 0; i < self.snakeLength*numSpacer; i++) {
+    
+    self.snakePath[i] = {x: playerInfo.x, y: playerInfo.y}
+  
+  }
 }
 
 function addOther(self, playerInfo) {
-  let otherPlayer = self.add.sprite(playerInfo.x, playerInfo.y, 'ball').setOrigin(0.5, 0.5); //{"body": new Array(snakeSegments)}   
-  otherPlayer.playerId = playerInfo.playerId;
-  self.otherPlayers.add(otherPlayer);
+  var otherPlayer = {}
+  otherPlayer.head = self.add.sprite(playerInfo.x, playerInfo.y, 'ball').setTint(playerInfo.color)
+  self.otherHeads.add(otherPlayer.head)
+  otherPlayer['body'] = new Array()
+  otherPlayer['path'] = playerInfo['path']
+
+  otherPlayer.head.setRotation(playerInfo.rotation)
+  for(let i =1; i<=playerInfo.len-1; i++){
+    otherPlayer['body'][i] = self.add.sprite(playerInfo['body'][i].x, playerInfo['body'][i].y,'ball').setOrigin(0.5,0.5).setTint(playerInfo.color);
+    self.otherBodies.add(otherPlayer['body'][i])
+  }
+
+  self.otherPlayers[playerInfo.playerId] = otherPlayer
+
+  // otherHead.playerId = playerInfo.playerId;
+  // self.otherPlayers.add(otherHead);
 }
 
 function create() {
@@ -52,10 +78,14 @@ function create() {
 
   var self = this;
 
-  this.alive = true; //Player moves only till they are alive
+  this.alive = false; //Player moves only till they are alive
   this.grace = true; // Initial Grace Period: Nobody dies until game officially starts
   this.socket = io();
-  this.otherPlayers = this.physics.add.group();
+  this.otherPlayers = {};
+  this.otherHeads = this.physics.add.group();
+  this.otherBodies = this.physics.add.group()
+  this.ownBody = this.physics.add.group();
+
   this.socket.on('renderGame', function (players) {
     //iterate over the player info object from server
     Object.keys(players).forEach(function (id) {
@@ -65,11 +95,39 @@ function create() {
         addOther(self, players[id])
       }
     });
+
+    //Collision handlers
+    self.physics.add.overlap(self.ownBody, self.snakeHead, ()=>{
+      console.log('self collison')
+    }) //add callback
+    self.physics.add.overlap(self.otherBodies, self.snakeHead, ()=>{
+      console.log('eating other snake')
+    }) //add callback
+    self.physics.add.overlap(self.otherHeads, self.ownBody, ()=>{
+      console.log('getting eaten')
+    }) //add callback
+
   });
 
   this.socket.on('newPlayer', function (playerInfo) {
     addOther(self, playerInfo);
   });
+
+  this.socket.on('playerMoved', function (playerInfo) {
+    var otherPlayer = self.otherPlayers[playerInfo.playerId]
+
+    otherPlayer.head.setRotation(playerInfo.rotation);
+    otherPlayer.head.setPosition(playerInfo.x, playerInfo.y);
+    var segment = otherPlayer['path'].pop();
+    segment = {x: otherPlayer.head.x, y: otherPlayer.head.y};
+
+    otherPlayer['path'].unshift(segment);
+    for (var i = 1; i<=playerInfo.len-1; i++)
+    {
+        otherPlayer['body'][i].x = (otherPlayer['path'][i * numSpacer]).x;
+        otherPlayer['body'][i].y = (otherPlayer['path'][i * numSpacer]).y;
+    }
+  })
 
   this.socket.on('start', (_) => {
     console.log('Game started!');
@@ -77,122 +135,83 @@ function create() {
   })
 
 
-  this.socket.on('playerMoved', function (playerInfo) {
-    //console.log('movement recieved')
 
-    self.otherPlayers.getChildren().forEach(function (otherPlayer) {
-      if (playerInfo.playerId === otherPlayer.playerId) {
-        //console.log(`Updating position for ${otherPlayer.snake.playerId}`);
-
-        otherPlayer.setRotation(playerInfo.rotation);
-        otherPlayer.setPosition(playerInfo.x, playerInfo.y);
-        /*for(let i =0;i<playerInfo["body"].length;i++){
-          otherPlayer.body[i].setPosition(playerInfo["body"].x, playerInfo["body"].y);
-        }*/
-        for(let i =0;i<snakeSegments;i++){
-          //otherPlayer.body[i] = self.add.sprite(playerInfo["body"][i].x , playerInfo["body"][i].y,'ball').setOrigin(0.5,0.5);
-          if(!self.grace && self.snake && (self.snake.x > playerInfo.body[i].x && self.snake.x < playerInfo.body[i].x +50) // Collision with other snake
-            && (self.snake.y > playerInfo.body[i].y && self.snake.y < playerInfo.body[i].y +50)) {
-            console.log('Crashed into opponent');
-            self.socket.emit('crash', {});
-            self.socket.disconnect();
-            self.alive = false;
-            break;
-          }
-        }
-      }
-    });
-  });
 
   this.socket.on('disconnect', function (playerId) {
-    self.otherPlayers.getChildren().forEach(function (otherPlayer) {
-      if (playerId === otherPlayer.playerId) {
-        otherPlayer.destroy();
-      }
-    });
-  });
-  this.socket.on('crash', function (playerId) {
-    self.otherPlayers.getChildren().forEach(function (otherPlayer) {
-      if (playerId === otherPlayer.playerId) {
-        otherPlayer.destroy();
-      }
-    });
   });
 
-  this.socket.on('grace', (_) => {
-    self.grace = false;
+  // this.socket.on('crash', function (playerId) {
+  //   self.otherPlayers.getChildren().forEach(function (otherPlayer) {
+  //     if (playerId === otherPlayer.playerId) {
+  //       otherPlayer.destroy();
+  //     }
+  //   });
+  // });
 
+  // this.socket.on('grace', (_) => {
+  //   self.grace = false;
+
+  // });
+
+  this.socket.on('foodLocation', function (foodLocation) {
+    if (self.food) self.food.destroy();
+    self.food = self.physics.add.image(foodLocation.x, foodLocation.y, 'food');
+    self.physics.add.overlap(self.snakeHead, self.food, function () {
+      this.socket.emit('foodCollected');
+    }, null, self);
   });
+
+  this.socket.on('grow', (playerInfo)=>{
+    // if(self.otherPlayers[playerInfo.playerId]){
+    //   ;
+    // }else{
+    //   self.snakeBody.push(sel)
+    // }
+  })
+
+
 }
 
 function update() {
-  if(this.alive && this.snake){
+  if(this.snakeHead){
 
     if (this.cursors.left.isDown) {
-      this.snake.setAngularVelocity(-200);
+      this.snakeHead.setAngularVelocity(-200);
       //console.log('Turning left');
     } else if (this.cursors.right.isDown) {
-      this.snake.setAngularVelocity(200);
+      this.snakeHead.setAngularVelocity(200);
       //console.log('Turning right');
     } else{
-      this.snake.setAngularVelocity(0);
+      this.snakeHead.setAngularVelocity(0);
+    }
+    this.physics.velocityFromRotation(this.snakeHead.rotation, 100, this.snakeHead.body.velocity);
+
+    var segment = this.snakePath.pop();
+    segment = {x: this.snakeHead.x, y: this.snakeHead.y};
+
+    this.snakePath.unshift(segment);
+    for (var i = 1; i<=this.snakeLength-1; i++)
+    {
+        this.snakeBody[i].x = (this.snakePath[i * numSpacer]).x;
+        this.snakeBody[i].y = (this.snakePath[i * numSpacer]).y;
     }
 
-    this.physics.velocityFromRotation(this.snake.rotation,100, this.snake.body.velocity);
+    this.physics.world.wrap(this.snakeHead, 5);
 
-    let sendPos = []
+    var x = this.snakeHead.x; 
+    var y = this.snakeHead.y;
+    var r = this.snakeHead.rotation;
 
-
-    for(let i = 0; i < snakeSegments; i++){
-      this.snakeBody[i].x = this.body[i*snakeSegments].x ;
-      this.snakeBody[i].y = this.body[i*snakeSegments].y ;
-      this.snakeBody[i].rotation = this.body[i*snakeSegments].rotation;
-      sendPos.push({"x":this.snakeBody[i].x , "y": this.snakeBody[i].y, "rotation": this.snakeBody[i].rotation});
+    if (this.snakeHead.oldPosition && (x !== this.snakeHead.oldPosition.x || y !== this.snakeHead.oldPosition.y || r !== this.snakeHead.oldPosition.rotation)) {
+      this.socket.emit('playerMovement', {x: this.snakeHead.x, y: this.snakeHead.y, rotation: this.snakeHead.rotation, body: this.snakeBody, path: this.snakePath});
     }
 
-    /* Values very close but different hence set doesnt reduce length
-    if([... new Set(sendPos)].length != sendPos.length){
-      console.log('Self Collision');
-    }*/
-
-    //Shittier check for self collision
-    for(let i = 0; i< sendPos.length; i++){
-      for(let j = 0; j< sendPos.length; j++){
-        
-        if(!this.grace && i!=j && (sendPos[i].x > sendPos[j].x && sendPos[i].x < sendPos[j].x+5) && (sendPos[i].y > sendPos[j].y && sendPos[i].y < sendPos[j].y+5))
-        {
-          console.log('Self Collision');
-          this.alive = false;
-          this.socket.emit('crash',{});
-          this.socket.disconnect();
-        }
-      }
-    }
-
-    
-
-
-    this.physics.world.wrap(this.snake, 5);
-
-    var x = this.snake.x; 
-    var y = this.snake.y;
-    var r = this.snake.rotation;
-
-
-
-    if (this.snake.oldPosition && (x !== this.snake.oldPosition.x || y !== this.snake.oldPosition.y || r !== this.snake.oldPosition.rotation)) {
-      //console.log('movement emitted')
-      this.socket.emit('playerMovement', { x: this.snake.x, y: this.snake.y, rotation: this.snake.rotation, body: sendPos});
-    }
     // save old position data
-    this.snake.oldPosition = {
-      x: this.snake.x,
-      y: this.snake.y,
-      rotation: this.snake.rotation
+    this.snakeHead.oldPosition = {
+      x: this.snakeHead.x,
+      y: this.snakeHead.y,
+      rotation: this.snakeHead.rotation
     };            
 
-
-    this.body.pop();
-    this.body.unshift({"x": this.snake.oldPosition.x , "y": this.snake.oldPosition.y, "rotation": this.snake.oldPosition.rotation});
   }
 }
