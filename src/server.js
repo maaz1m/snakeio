@@ -4,7 +4,6 @@ const socketio = require('socket.io')
 
 var PORT = 8000
 
-const snakeSegments = 12;
 
 const server = http.createServer(async(req,resp) =>{
   resp.end(await readFile(req.url.substr(1)))
@@ -23,7 +22,7 @@ var food = {
 };
 
 
-const initNumSegments = 5;
+const initNumSegments = 9;
 const numSpacer = 10;
 
 let currentPlayers = 0;
@@ -35,15 +34,15 @@ const createPlayer = (socket)=>{
   var randY = Math.floor(Math.random() * 550) + 50;
   var randColor = Math.random() * 0xffffff
   return {
-      rotation: 0,
-      x: randX,
-      y: randY,
-      playerId: socket.id,
-      color: randColor,
-      len: initNumSegments,
-      path: new Array(numSpacer*initNumSegments).fill({x: randX, y: randY}),
-      body: new Array(initNumSegments).fill({x: randX, y: randY})
-    }
+    rotation: 0,
+    x: randX,
+    y: randY,
+    playerId: socket.id,
+    color: randColor,
+    len: initNumSegments,
+    path: new Array(numSpacer*initNumSegments).fill({x: randX, y: randY}),
+    body: new Array(initNumSegments).fill({x: randX, y: randY})
+  }
 
 }
 
@@ -62,14 +61,13 @@ io.on('connection', socket =>{
   //Send location of new food
   socket.emit('foodLocation', food);
 
-  // if(numPlayers === currentPlayers){
-  //   io.emit('start', {})
-  //   setTimeout(() => { 
-  //     io.emit('grace',{}); 
-  //     console.log('Grace-Period ended ...');
-  //   }, 5000);
+  if(numPlayers === currentPlayers){
+    setTimeout(() => { 
+      io.emit('grace',{}); 
+      console.log('Grace-Period ended ...');
+    }, 5000);
 
-  // }
+  }
 
   socket.on('playerMovement', function (movementData) {
     //console.log(`movement recieved from ${socket.id}`)
@@ -82,10 +80,11 @@ io.on('connection', socket =>{
     socket.broadcast.emit('playerMoved', players[socket.id]);
   });
 
-  // socket.on('crash', (data) => {
-  //   console.log(`${socket.id} crashed`);
-  //   socket.broadcast.emit('crash',socket.id);
-  // })
+  socket.on('crash', (_) => {
+    //console.log(`${socket.id} crashed`);
+    socket.broadcast.emit('crash',socket.id);
+    
+  })
 
   socket.on('foodCollected', function () {
     food.x = Math.floor(Math.random() * 700) + 50;
