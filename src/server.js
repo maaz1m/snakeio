@@ -1,6 +1,7 @@
 const fs = require('fs')
 const http = require('http')
 const socketio = require('socket.io')
+const process = require('process')
 
 var PORT = 8000
 
@@ -22,11 +23,17 @@ var food = {
 };
 
 
-const initNumSegments = 9;
+const initNumSegments = 12;
 const numSpacer = 10;
 
 let currentPlayers = 0;
-let numPlayers = 2;
+let numPlayers = Number(process.argv[2])
+let deadPlayers = 0;
+
+let dead = [];
+
+console.log(`Starting a server for ${numPlayers} players`);
+
 
 const createPlayer = (socket)=>{
 
@@ -84,6 +91,14 @@ io.on('connection', socket =>{
     //console.log(`${socket.id} crashed`);
     socket.broadcast.emit('crash',socket.id);
     
+    if(!dead.includes(socket.id)){
+      dead.push(socket.id);
+      deadPlayers += 1;
+
+      if(deadPlayers == (numPlayers -1)){
+        console.log('Only one player remaining, Winner!');
+      }
+    }
   })
 
   socket.on('foodCollected', function () {

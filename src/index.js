@@ -101,11 +101,18 @@ function create() {
     //Collision handlers
     self.physics.add.overlap(self.ownBody, self.snakeHead, ()=>{
       console.log('self collison')
+      if(!self.grace){
+        self.alive = false;
+        self.socket.emit('crash',{});
+      }
     }) //add callback
     self.physics.add.overlap(self.otherBodies, self.snakeHead, ()=>{
       console.log('eating other snake') // If you collide with a snake from the side, you die
-      self.alive = false;
-      self.socket.emit('crash',{})
+
+      if(!self.grace){
+        self.alive = false;
+        self.socket.emit('crash',{})
+      }
     }) //add callback
     self.physics.add.overlap(self.otherHeads, self.ownBody, ()=>{
       console.log('getting eaten') // Other player dies 
@@ -165,10 +172,10 @@ function create() {
   })
 
 
-  // this.socket.on('grace', (_) => {
-  //   self.grace = false;
+  this.socket.on('grace', (_) => {
+    self.grace = false;
 
-  // });
+  });
 
   this.socket.on('foodLocation', function (foodLocation) {
     if (self.food) self.food.destroy();
