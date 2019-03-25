@@ -46,6 +46,7 @@ const createPlayer = (socket)=>{
     y: randY,
     playerId: socket.id,
     color: randColor,
+    score: 0,
     len: initNumSegments,
     path: new Array(numSpacer*initNumSegments).fill({x: randX, y: randY}),
     body: new Array(initNumSegments).fill({x: randX, y: randY})
@@ -95,8 +96,21 @@ io.on('connection', socket =>{
       dead.push(socket.id);
       deadPlayers += 1;
 
+      if(deadPlayers==numPlayers){
+        console.log('Its a draw')
+        Object.keys(players).forEach((id)=>{
+          console.log('Kills:')
+          console.log(id,'\t',players[id].score)
+        })
+      }
+
+
       if(deadPlayers == (numPlayers -1)){
         console.log('Only one player remaining, Winner!');
+        Object.keys(players).forEach((id)=>{
+          console.log('Kills:')
+          console.log(id,'\t',players[id].score)
+        })
       }
     }
   })
@@ -107,6 +121,10 @@ io.on('connection', socket =>{
     io.emit('grow', players[socket.id])
     io.emit('foodLocation', food);
   });
+
+  socket.on('score', ()=>{
+    players[socket.id].score+=10;
+  })
 
 
 

@@ -20,7 +20,7 @@ var config = {
   } 
 };
 
-
+var score = 0;
 
 var game = new Phaser.Game(config);
 
@@ -55,7 +55,6 @@ function addPlayer(self, playerInfo) {
 function addOther(self, playerInfo) {
   var otherPlayer = {}
   otherPlayer.head = self.add.sprite(playerInfo.x, playerInfo.y, 'ball').setTint(playerInfo.color)
-  //otherPlayer.playerId = playerInfo.playerID
   self.otherHeads.add(otherPlayer.head)
   otherPlayer['body'] = new Array()
   otherPlayer['path'] = playerInfo['path']
@@ -68,9 +67,6 @@ function addOther(self, playerInfo) {
   }
 
   self.otherPlayers[playerInfo.playerId] = otherPlayer
-
-  // otherHead.playerId = playerInfo.playerId;
-  // self.otherPlayers.add(otherHead);
 }
 
 function create() {
@@ -99,25 +95,32 @@ function create() {
     });
 
     //Collision handlers
+    self.physics.add.overlap(self.otherHeads, self.snakeHead, ()=>{
+      if(!self.grace){
+        self.alive = false;
+        self.socket.emit('crash',{});
+      }
+    }) //add callback
+
     self.physics.add.overlap(self.ownBody, self.snakeHead, ()=>{
-      console.log('self collison')
       if(!self.grace){
         self.alive = false;
         self.socket.emit('crash',{});
       }
     }) //add callback
     self.physics.add.overlap(self.otherBodies, self.snakeHead, ()=>{
-      console.log('eating other snake') // If you collide with a snake from the side, you die
-
       if(!self.grace){
         self.alive = false;
         self.socket.emit('crash',{})
       }
-    }) //add callback
+    })//add callback
     self.physics.add.overlap(self.otherHeads, self.ownBody, ()=>{
-      console.log('getting eaten') // Other player dies 
-    }) //add callback
-
+      if(!self.grace){
+        score+=10;
+        console.log('Score:',score)
+        socket.emit('score')
+      }
+    })//add callback
   });
 
   this.socket.on('newPlayer', function (playerInfo) {
@@ -142,18 +145,26 @@ function create() {
 
 
   this.socket.on('disconnect', function (playerId) {
+    if(self.otherPlayers[playerId]){
+      var otherPlayer = self.otherPlayers[playerId]
+      otherPlayer.head.destroy()
+      for (var i = 1; i < otherPlayer['body'].length; i++) { 
+        otherPlayer['body'][i].destroy()
+      }
+      delete self.otherPlayers[playerId];      
+    }
   });
 
   this.socket.on('crash', function (playerId) {
-    /*for(key in self.otherPlayers){
-      console.log(`Recieved message to remove ${playerId}`)
-      if (playerId === key) {
-        console.log(`Removing ${playerId}`);
-        delete self.otherPlayers[key];
-      }
-   }*/
+    var otherPlayer = self.otherPlayers[playerId]
+    otherPlayer.head.destroy()
+    for (var i = 1; i < otherPlayer['body'].length; i++) { 
+      otherPlayer['body'][i].destroy()
+    }
+    delete self.otherPlayers[playerId];
+
     let key = playerId;
-    delete self.otherPlayers[key];
+    // delete self.otherPlayers[key];
     console.log(`Deleted dict entry for ${key}`);
     self.otherBodies.getChildren().forEach(ob => {
       if(ob.playerId === key){
